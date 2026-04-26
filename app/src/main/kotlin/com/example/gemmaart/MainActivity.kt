@@ -8,13 +8,13 @@ import androidx.appcompat.app.AppCompatActivity
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
     private val client = OkHttpClient()
-    private val supabaseUrl = "https://rjdcuhxskwnchzaakjgv.supabase.co/functions/v1/gemma-node-app"
-    private val supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJqZGN1aHhza3duY2h6YWFramd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjY5OTMsImV4cCI6MjA5MTIwMjk5M30.OYzreR0JnCj6JZbng9LS7DZzyqvpi8nK-vwP86rgfWE"
+    private val endpoint = "https://rjdcuhxskwnchzaakjgv.supabase.co/functions/v1/hyper-service"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,18 +27,19 @@ class MainActivity : AppCompatActivity() {
         }
 
         val input = EditText(this).apply {
-            hint = "Напиши что-нибудь..."
+            hint = "Введите сообщение..."
             setTextColor(Color.BLACK)
+            setHintTextColor(Color.GRAY)
         }
 
         val btn = Button(this).apply {
-            text = "Отправить"
+            text = "Спросить ИИ"
         }
 
         val responseView = TextView(this).apply {
-            text = "Жду запроса..."
+            text = "Ответ появится здесь"
             textSize = 16f
-            setTextColor(Color.DKGRAY)
+            setTextColor(Color.BLACK)
             setPadding(0, 40, 0, 0)
         }
 
@@ -48,33 +49,39 @@ class MainActivity : AppCompatActivity() {
         setContentView(layout)
 
         btn.setOnClickListener {
-            val prompt = input.text.toString()
-            if (prompt.isNotEmpty()) {
-                sendToSupabase(prompt, responseView)
+            val text = input.text.toString()
+            if (text.isNotEmpty()) {
+                sendRequest(text, responseView)
             }
         }
     }
 
-    private fun sendToSupabase(prompt: String, view: TextView) {
-        runOnUiThread { view.text = "Думаю..." }
-        
-        val json = "{\"prompt\": \"$prompt\"}"
-        val body = json.toRequestBody("application/json".toMediaType())
+    private fun sendRequest(message: String, view: TextView) {
+        runOnUiThread { view.text = "Gemma думает..." }
 
-        val request = Request.Builder()
-            .url(supabaseUrl)
-            .addHeader("Authorization", "Bearer $supabaseKey")
-            .addHeader("apikey", supabaseKey)
-            .post(body)
-            .build()
+        val json = JSONObject().apply {
+            put("message", message)
+            put("model", "Gemma 3 27B") // Модель по умолчанию
+        }
+
+        val body = json.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder().url(endpoint).post(body).build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { view.text = "Ошибка: ${e.message}" }
+                runOnUiThread { view.text = "Ошибка сети: ${e.message}" }
             }
+
             override fun onResponse(call: Call, response: Response) {
-                val resText = response.body?.string() ?: "Нет ответа"
-                runOnUiThread { view.text = resText }
+                val responseData = response.body?.string()
+                runOnUiThread {
+                    try {
+                        val jsonResponse = JSONObject(responseData ?: "{}")
+                        view.text = jsonResponse.optString("response", "Пустой ответ")
+                    } catch (e: Exception) {
+                        view.text = "Ошибка сервера: $responseData"
+                    }
+                }
             }
         })
     }
