@@ -1,10 +1,10 @@
 package com.example.gemmaart
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
 import android.widget.*
 import android.view.Gravity
 import android.graphics.Color
+import androidx.appcompat.app.AppCompatActivity
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -21,22 +21,25 @@ class MainActivity : AppCompatActivity() {
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(60, 60, 60, 60)
-            setBackgroundColor(Color.parseColor("#FFFFFF"))
+            setPadding(50, 50, 50, 50)
+            gravity = Gravity.CENTER_HORIZONTAL
+            setBackgroundColor(Color.WHITE)
         }
 
         val input = EditText(this).apply {
-            hint = "Спроси Gemma..."
+            hint = "Напиши что-нибудь..."
+            setTextColor(Color.BLACK)
         }
 
         val btn = Button(this).apply {
-            text = "Отправить в Supabase"
+            text = "Отправить"
         }
 
         val responseView = TextView(this).apply {
-            text = "Ответ от сервера появится здесь"
+            text = "Жду запроса..."
             textSize = 16f
-            setPadding(0, 50, 0, 0)
+            setTextColor(Color.DKGRAY)
+            setPadding(0, 40, 0, 0)
         }
 
         layout.addView(input)
@@ -45,19 +48,18 @@ class MainActivity : AppCompatActivity() {
         setContentView(layout)
 
         btn.setOnClickListener {
-            val question = input.text.toString()
-            if (question.isNotEmpty()) {
-                sendRequest(question, responseView)
+            val prompt = input.text.toString()
+            if (prompt.isNotEmpty()) {
+                sendToSupabase(prompt, responseView)
             }
         }
     }
 
-    private fun sendRequest(prompt: String, view: TextView) {
-        view.text = "Запрос отправлен..."
+    private fun sendToSupabase(prompt: String, view: TextView) {
+        runOnUiThread { view.text = "Думаю..." }
         
-        // Формируем JSON. Если твой сервер ждет другой формат, поправим.
-        val json = """{"prompt": "$prompt"}"""
-        val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
+        val json = "{\"prompt\": \"$prompt\"}"
+        val body = json.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
             .url(supabaseUrl)
@@ -68,14 +70,11 @@ class MainActivity : AppCompatActivity() {
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                runOnUiThread { view.text = "Ошибка сети: ${e.message}" }
+                runOnUiThread { view.text = "Ошибка: ${e.message}" }
             }
-
             override fun onResponse(call: Call, response: Response) {
-                val bodyString = response.body?.string() ?: "Пустой ответ"
-                runOnUiThread {
-                    view.text = if (response.isSuccessful) bodyString else "Ошибка сервера: ${response.code}"
-                }
+                val resText = response.body?.string() ?: "Нет ответа"
+                runOnUiThread { view.text = resText }
             }
         })
     }
